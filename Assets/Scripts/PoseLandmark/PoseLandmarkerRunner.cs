@@ -5,20 +5,31 @@
 // https://opensource.org/licenses/MIT.
 
 using System.Collections;
-using Mediapipe.Tasks.Vision.FaceDetector;
+using Mediapipe.Tasks.Vision.PoseLandmarker;
 using UnityEngine;
 using UnityEngine.Rendering;
-using FaceDetectionResult = Mediapipe.Tasks.Components.Containers.DetectionResult;
+using System.Collections.Generic;
+using System.Drawing;
 
-namespace Mediapipe.Unity.Sample.FaceDetection
+namespace Mediapipe.Unity.Sample.PoseLandmarkDetection
 {
-  public class FaceDetectorRunner : VisionTaskApiRunner<FaceDetector>
+  public class PoseLandmarkerRunner : VisionTaskApiRunner<PoseLandmarker>
   {
-    [SerializeField] private DetectionResultAnnotationController _detectionResultAnnotationController;
+    private List<Vector2> gesturePoints = new List<Vector2>();
+    private GestureRecognizer gestureRecognizer;
+
+    private float recordDuration = 5.0f; // seconds
+    private float elapsedTime = 0f;
+    private bool isRecording = false;
+    private readonly object _currentTargetLock = new object();
+
+    private PoseLandmarkerResult currentTarget;
+
+    [SerializeField] private PoseLandmarkerResultAnnotationController _poseLandmarkerResultAnnotationController;
 
     private Experimental.TextureFramePool _textureFramePool;
 
-    public readonly FaceDetectionConfig config = new FaceDetectionConfig();
+    public readonly PoseLandmarkDetectionConfig config = new PoseLandmarkDetectionConfig();
 
     public override void Stop()
     {
@@ -26,6 +37,12 @@ namespace Mediapipe.Unity.Sample.FaceDetection
       _textureFramePool?.Dispose();
       _textureFramePool = null;
     }
+    void Awake()
+    {
+      gestureRecognizer = GetComponent<GestureRecognizer>();
+    }
+
+    private bool isGestureActive = false; 
 
     protected override IEnumerator Run()
     {
@@ -33,21 +50,23 @@ namespace Mediapipe.Unity.Sample.FaceDetection
       Debug.Log($"Image Read Mode = {config.ImageReadMode}");
       Debug.Log($"Model = {config.ModelName}");
       Debug.Log($"Running Mode = {config.RunningMode}");
-      Debug.Log($"MinDetectionConfidence = {config.MinDetectionConfidence}");
-      Debug.Log($"MinSuppressionThreshold = {config.MinSuppressionThreshold}");
-      Debug.Log($"NumFaces = {config.NumFaces}");
+      Debug.Log($"NumPoses = {config.NumPoses}");
+      Debug.Log($"MinPoseDetectionConfidence = {config.MinPoseDetectionConfidence}");
+      Debug.Log($"MinPosePresenceConfidence = {config.MinPosePresenceConfidence}");
+      Debug.Log($"MinTrackingConfidence = {config.MinTrackingConfidence}");
+      Debug.Log($"OutputSegmentationMasks = {config.OutputSegmentationMasks}");
 
       yield return AssetLoader.PrepareAssetAsync(config.ModelPath);
 
-      var options = config.GetFaceDetectorOptions(config.RunningMode == Tasks.Vision.Core.RunningMode.LIVE_STREAM ? OnFaceDetectionsOutput : null);
-      taskApi = FaceDetector.CreateFromOptions(options, GpuManager.GpuResources);
+      var options = config.GetPoseLandmarkerOptions(config.RunningMode == Tasks.Vision.Core.RunningMode.LIVE_STREAM ? OnPoseLandmarkDetectionOutput : null);
+      taskApi = PoseLandmarker.CreateFromOptions(options, GpuManager.GpuResources);
       var imageSource = ImageSourceProvider.ImageSource;
 
       yield return imageSource.Play();
 
       if (!imageSource.isPrepared)
       {
-        Debug.LogError("Failed to start ImageSource, exiting...");
+        Logger.LogError(TAG, "Failed to start ImageSource, exiting...");
         yield break;
       }
 
@@ -58,17 +77,21 @@ namespace Mediapipe.Unity.Sample.FaceDetection
       // NOTE: The screen will be resized later, keeping the aspect ratio.
       screen.Initialize(imageSource);
 
-      SetupAnnotationController(_detectionResultAnnotationController, imageSource);
+      SetupAnnotationController(_poseLandmarkerResultAnnotationController, imageSource);
+      _poseLandmarkerResultAnnotationController.InitScreen(imageSource.textureWidth, imageSource.textureHeight);
 
       var transformationOptions = imageSource.GetTransformationOptions();
       var flipHorizontally = transformationOptions.flipHorizontally;
       var flipVertically = transformationOptions.flipVertically;
-      var imageProcessingOptions = new Tasks.Vision.Core.ImageProcessingOptions(rotationDegrees: (int)transformationOptions.rotationAngle);
+
+      // Always setting rotationDegrees to 0 to avoid the issue that the detection becomes unstable when the input image is rotated.
+      // https://github.com/homuler/MediaPipeUnityPlugin/issues/1196
+      var imageProcessingOptions = new Tasks.Vision.Core.ImageProcessingOptions(rotationDegrees: 0);
 
       AsyncGPUReadbackRequest req = default;
       var waitUntilReqDone = new WaitUntil(() => req.done);
       var waitForEndOfFrame = new WaitForEndOfFrame();
-      var result = FaceDetectionResult.Alloc(options.numFaces);
+      var result = PoseLandmarkerResult.Alloc(options.numPoses, options.outputSegmentationMasks);
 
       // NOTE: we can share the GL context of the render thread with MediaPipe (for now, only on Android)
       var canUseGpuImage = SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES3 && GpuManager.GpuResources != null;
@@ -83,7 +106,7 @@ namespace Mediapipe.Unity.Sample.FaceDetection
 
         if (!_textureFramePool.TryGetTextureFrame(out var textureFrame))
         {
-          yield return null;
+          yield return new WaitForEndOfFrame();
           continue;
         }
 
@@ -128,24 +151,24 @@ namespace Mediapipe.Unity.Sample.FaceDetection
           case Tasks.Vision.Core.RunningMode.IMAGE:
             if (taskApi.TryDetect(image, imageProcessingOptions, ref result))
             {
-              _detectionResultAnnotationController.DrawNow(result);
+              _poseLandmarkerResultAnnotationController.DrawNow(result);
             }
             else
             {
-              // clear the annotation
-              _detectionResultAnnotationController.DrawNow(default);
+              _poseLandmarkerResultAnnotationController.DrawNow(default);
             }
+            DisposeAllMasks(result);
             break;
           case Tasks.Vision.Core.RunningMode.VIDEO:
             if (taskApi.TryDetectForVideo(image, GetCurrentTimestampMillisec(), imageProcessingOptions, ref result))
             {
-              _detectionResultAnnotationController.DrawNow(result);
+              _poseLandmarkerResultAnnotationController.DrawNow(result);
             }
             else
             {
-              // clear the annotation
-              _detectionResultAnnotationController.DrawNow(default);
+              _poseLandmarkerResultAnnotationController.DrawNow(default);
             }
+            DisposeAllMasks(result);
             break;
           case Tasks.Vision.Core.RunningMode.LIVE_STREAM:
             taskApi.DetectAsync(image, GetCurrentTimestampMillisec(), imageProcessingOptions);
@@ -154,9 +177,65 @@ namespace Mediapipe.Unity.Sample.FaceDetection
       }
     }
 
-    private void OnFaceDetectionsOutput(FaceDetectionResult result, Image image, long timestamp)
+    private void OnPoseLandmarkDetectionOutput(PoseLandmarkerResult result, Image image, long timestamp)
     {
-      _detectionResultAnnotationController.DrawLater(result);
+      _poseLandmarkerResultAnnotationController.DrawLater(result);
+      DisposeAllMasks(result);
+
+ 
+        result.CloneTo(ref currentTarget);
+        //Debug.Log("currenttarget.poselandmarks: " + currentTarget.poseLandmarks);
+
+        //TODO: figure out how to properly access 
+        // poselandmarks !!
+
+        if (currentTarget.poseLandmarks == null || currentTarget.poseLandmarks.Count == 0)
+        {
+          Debug.LogWarning("landmark data not found.");
+          // always null here so always return
+        return;
+        }
+
+        var landmarks = currentTarget.poseLandmarks[0];
+        if (landmarks.landmarks == null || landmarks.landmarks.Count <= 19)
+        {
+          Debug.LogWarning("Expected landmark data not found.");
+          return;
+        }
+        var rightHandLandmark = landmarks.landmarks[19]; // landmark index 19 for right hand
+
+        // Convert the normalized point to Unity coordinates (example: screen pixels)
+        Vector2 point = new Vector2(
+            rightHandLandmark.x * gestureRecognizer.screenW,
+            (1 - rightHandLandmark.y) * gestureRecognizer.screenH);  // Flip Y axis if needed
+
+        if (isRecording)
+        {
+          gesturePoints.Add(point);
+          elapsedTime += Time.deltaTime;
+
+          if (elapsedTime >= recordDuration)
+          {
+            isRecording = false;
+            gestureRecognizer.RecognizeGesture();
+          }
+        }
+      
+
+      
+     
+      
+    }
+
+    private void DisposeAllMasks(PoseLandmarkerResult result)
+    {
+      if (result.segmentationMasks != null)
+      {
+        foreach (var mask in result.segmentationMasks)
+        {
+          mask.Dispose();
+        }
+      }
     }
   }
 }
