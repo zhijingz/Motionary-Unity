@@ -21,9 +21,9 @@ namespace Mediapipe.Unity.Sample.PoseLandmarkDetection
     private float recordDuration = 5.0f; // seconds
     private float elapsedTime = 0f;
     private bool isRecording = false;
-    private readonly object _currentTargetLock = new object();
 
-    private PoseLandmarkerResult currentTarget;
+    private PoseLandmarkerResult currentResult;
+    private readonly object _resultLock = new object();
 
     [SerializeField] private PoseLandmarkerResultAnnotationController _poseLandmarkerResultAnnotationController;
 
@@ -179,52 +179,23 @@ namespace Mediapipe.Unity.Sample.PoseLandmarkDetection
 
     private void OnPoseLandmarkDetectionOutput(PoseLandmarkerResult result, Image image, long timestamp)
     {
+
       _poseLandmarkerResultAnnotationController.DrawLater(result);
       DisposeAllMasks(result);
 
- 
-        result.CloneTo(ref currentTarget);
-        //Debug.Log("currenttarget.poselandmarks: " + currentTarget.poseLandmarks);
-
-        //TODO: figure out how to properly access 
-        // poselandmarks !!
-
-        if (currentTarget.poseLandmarks == null || currentTarget.poseLandmarks.Count == 0)
-        {
-          Debug.LogWarning("landmark data not found.");
-          // always null here so always return
-        return;
-        }
-
-        var landmarks = currentTarget.poseLandmarks[0];
-        if (landmarks.landmarks == null || landmarks.landmarks.Count <= 19)
-        {
-          Debug.LogWarning("Expected landmark data not found.");
-          return;
-        }
-        var rightHandLandmark = landmarks.landmarks[19]; // landmark index 19 for right hand
-
-        // Convert the normalized point to Unity coordinates (example: screen pixels)
-        Vector2 point = new Vector2(
-            rightHandLandmark.x * gestureRecognizer.screenW,
-            (1 - rightHandLandmark.y) * gestureRecognizer.screenH);  // Flip Y axis if needed
-
-        if (isRecording)
-        {
-          gesturePoints.Add(point);
-          elapsedTime += Time.deltaTime;
-
-          if (elapsedTime >= recordDuration)
-          {
-            isRecording = false;
-            gestureRecognizer.RecognizeGesture();
-          }
-        }
-      
-
-      
-     
-      
+      if (result.poseLandmarks != null)
+      {
+        var rightHandLandmark = result.poseLandmarks[0].landmarks[19];
+        var screenPoint = new Vector2(
+            rightHandLandmark.x,
+            rightHandLandmark.y
+        );
+        gestureRecognizer.AddPoint(screenPoint);
+      }
+      else
+      {
+        Debug.LogWarning("AHHHH");
+      }  
     }
 
     private void DisposeAllMasks(PoseLandmarkerResult result)

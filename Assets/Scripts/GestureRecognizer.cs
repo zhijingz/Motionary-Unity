@@ -1,5 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Mono.Cecil.Cil;
+
 
 public class GestureRecognizer : MonoBehaviour
 {
@@ -12,6 +14,9 @@ public class GestureRecognizer : MonoBehaviour
 
     public float screenW = Screen.width;
     public float screenH = Screen.height;
+
+
+    private readonly object _resultLock = new object();
 
     void Awake()
     {
@@ -26,31 +31,33 @@ public class GestureRecognizer : MonoBehaviour
             gesturePoints.Clear();
             elapsedTime = 0f;
             Debug.Log("Started recording gesture points...");
+
+        }
+
+        if (gesturePoints.Count >= 40)
+        {
+            RecognizeGesture();
         }
     }
 
-    public void RecognizeGesture()
+    public void AddPoint(Vector2 point) {
+        gesturePoints.Add(point);
+    }
+
+    private void RecognizeGesture()
     {
-        if (gesturePoints.Count > 10)  // minimum points check
+        var result = dollarRecognizer.Recognize(gesturePoints);
+        if (result.Match != null)
         {
-            var result = dollarRecognizer.Recognize(gesturePoints);
-            if (result.Match != null)
-            {
-                Debug.Log($"Recognized gesture: {result.Match.Name} with score {result.Score}");
-            }
-            else
-            {
-                Debug.Log("No gesture recognized");
-            }
+            Debug.Log($"Recognized gesture: {result.Match.Name} with score {result.Score}");
         }
         else
         {
-            Debug.Log("Not enough points for recognition");
+            Debug.Log("No gesture recognized");
         }
-
         // Clear for next recording
         gesturePoints.Clear();
         elapsedTime = 0f;
+
     }
-    
 }

@@ -47,6 +47,7 @@ namespace Mediapipe.Unity
           _currentTarget.segmentationMasks.Clear();
         }
         isStale = true;
+
       }
     }
 
@@ -56,6 +57,8 @@ namespace Mediapipe.Unity
       {
         isStale = false;
         annotation.Draw(_currentTarget.poseLandmarks, _visualizeZ);
+
+       
       }
     }
   }

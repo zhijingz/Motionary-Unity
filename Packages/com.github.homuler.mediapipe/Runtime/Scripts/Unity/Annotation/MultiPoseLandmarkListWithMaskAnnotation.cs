@@ -104,8 +104,18 @@ namespace Mediapipe.Unity
 
     public void Draw(IReadOnlyList<mptcc.NormalizedLandmarks> targets, bool visualizeZ = false)
     {
+
+ 
+
       if (ActivateFor(targets))
       {
+
+       if (targets == null || targets.Count == 0)
+        {
+          Debug.LogWarning("AHHHHHd");
+          return;
+        }
+
         CallActionForAll(targets, (annotation, target) =>
         {
           if (annotation != null) { annotation.Draw(target, visualizeZ); }
