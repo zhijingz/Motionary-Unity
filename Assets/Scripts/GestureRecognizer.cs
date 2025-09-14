@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using Mono.Cecil.Cil;
 
 
+
 public class GestureRecognizer : MonoBehaviour
 {
+    GestureLibrary gestureLibrary;
+    
     private DollarRecognizer dollarRecognizer;
     private const float SAMPLING_FREQUENCY = 0.1f;
     private List<Vector2> gesturePoints = new List<Vector2>();
@@ -16,25 +19,22 @@ public class GestureRecognizer : MonoBehaviour
     public float screenH = Screen.height;
 
 
-    private readonly object _resultLock = new object();
-
     void Awake()
     {
+        gestureLibrary = GetComponent<GestureLibrary>();
         dollarRecognizer = new DollarRecognizer();
-
+    }
+    void Start()
+    {
+        dollarRecognizer.SavePattern("circle", gestureLibrary.GetCirclePoints());
+        dollarRecognizer.SavePattern("star", gestureLibrary.GetStarPoints());
+        dollarRecognizer.SavePattern("star", gestureLibrary.GetSquarePoints());
     }
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.R))  // Press 'R' to start recording gesture
-        {
-            isRecording = true;
-            gesturePoints.Clear();
-            elapsedTime = 0f;
-            Debug.Log("Started recording gesture points...");
 
-        }
 
-        if (gesturePoints.Count >= 40)
+        if (gesturePoints.Count >= 60)
         {
             RecognizeGesture();
         }
@@ -54,6 +54,7 @@ public class GestureRecognizer : MonoBehaviour
         else
         {
             Debug.Log("No gesture recognized");
+            
         }
         // Clear for next recording
         gesturePoints.Clear();

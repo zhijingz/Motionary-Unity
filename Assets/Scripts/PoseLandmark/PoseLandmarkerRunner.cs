@@ -185,16 +185,18 @@ namespace Mediapipe.Unity.Sample.PoseLandmarkDetection
 
       if (result.poseLandmarks != null)
       {
+        //only 19th coordinate is sent
         var rightHandLandmark = result.poseLandmarks[0].landmarks[19];
         var screenPoint = new Vector2(
             rightHandLandmark.x,
             rightHandLandmark.y
         );
+        //Debug.Log(rightHandLandmark.x + " " + rightHandLandmark.y);
         gestureRecognizer.AddPoint(screenPoint);
       }
       else
       {
-        Debug.LogWarning("AHHHH");
+        Debug.LogWarning("no hand landmarks found");
       }  
     }
 
