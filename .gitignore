@@ -3,6 +3,29 @@
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
 #
 
+# ========== MediaPipeUnityPlugin-specific additions ==========
+# DO NOT ignore native plugin binaries or plugin folders needed for MediaPipe
+# Ensure these lines come AFTER any previous /Plugins/ or binary ignore rules so they take effect
+
+# Explicitly track all MediaPipe native plugins and binaries (DLLs, SOs, DYLIBs) and resources
+!/[Aa]ssets/Plugins/
+!/[Aa]ssets/Plugins/**/*.dll
+!/[Aa]ssets/Plugins/**/*.so
+!/[Aa]ssets/Plugins/**/*.dylib
+!/[Aa]ssets/Plugins/**/*.aar
+!/[Aa]ssets/Plugins/**/*.bundle
+
+# Track all resources and models needed by MediaPipe (such as StreamingAssets)
+!/[Aa]ssets/StreamingAssets/
+!/[Aa]ssets/StreamingAssets/**
+
+# If you ever add platform-specific ignore rules for plugins, apply negations for the MediaPipe paths above
+
+# Optional: If you use custom model/resource/graph locations, un-ignore those here too
+# !/[Aa]ssets/MediaPipeResources/
+# !/[Aa]ssets/MediaPipeResources/**
+
+
 .utmp/
 /[Ll]ibrary/
 /[Tt]emp/

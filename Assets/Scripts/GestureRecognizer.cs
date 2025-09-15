@@ -28,13 +28,13 @@ public class GestureRecognizer : MonoBehaviour
     {
         dollarRecognizer.SavePattern("circle", gestureLibrary.GetCirclePoints());
         dollarRecognizer.SavePattern("star", gestureLibrary.GetStarPoints());
-        dollarRecognizer.SavePattern("star", gestureLibrary.GetSquarePoints());
+        dollarRecognizer.SavePattern("square", gestureLibrary.GetSquarePoints());
     }
     void Update()
     {
 
 
-        if (gesturePoints.Count >= 60)
+        if (gesturePoints.Count >= 50)
         {
             RecognizeGesture();
         }
